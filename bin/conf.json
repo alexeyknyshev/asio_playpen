@@ -1,0 +1,5 @@
+{
+    "port": 8080,
+    "threads": 4,
+    "timeout": 1500
+}
