@@ -5,6 +5,8 @@
 
 #include "uri.h"
 
+#define SUPPORTED_HTTP_VERSION "HTTP/1.1"
+
 namespace {
 
 std::string &ltrim(std::string &s) {
@@ -26,7 +28,7 @@ inline std::string &trim(std::string &s) {
 std::ostream &operator <<(std::ostream &o, const Client::Request &req)
 {
     const std::string path = req.path.empty() ? "/" : req.path;
-    o << req.type << " " << path << " " << "HTTP/1.1" << "\r\n"
+    o << req.type << " " << path << " " << SUPPORTED_HTTP_VERSION << "\r\n"
       << "Host: " << req.host << "\r\n"
       << "Accept: " << "*/*" << "\r\n"
       << "Connection: " << "close" << "\r\n\r\n";
@@ -85,7 +87,7 @@ Client::Client(boost::asio::io_service &service)
     mSocket = std::make_shared<boost::asio::ip::tcp::socket>(service);
 }
 
-void Client::sendRequest(const std::string &reqType, const std::string &url, HandlerFunc func)
+void Client::sendRequest(const std::string &reqType, const std::string &url, unsigned timeout, HandlerFunc func)
 {
     mUri = Uri(url);
     mRequestType = reqType;
@@ -95,19 +97,48 @@ void Client::sendRequest(const std::string &reqType, const std::string &url, Han
         mUri.setPort("80");
     }
 
+    auto thisPtr = shared_from_this();
+
+    mFinished = false;
+
+    if (timeout > 0) {
+        mTimer = std::make_shared<boost::asio::deadline_timer>(mIOService);
+        mTimer->expires_from_now(boost::posix_time::milliseconds(timeout));
+        mTimer->async_wait([thisPtr, func](const boost::system::error_code &err) {
+            if (!err) {
+                if (!thisPtr->mFinished) {
+                    thisPtr->mFinished = true;
+
+                    ResponsePtr res(new Response);
+                    res->httpCode = 434;
+                    res->version = SUPPORTED_HTTP_VERSION;
+                    func(res);
+                }
+            }
+        });
+    }
+
     boost::asio::ip::tcp::resolver::query query(mUri.getHost(), mUri.getPort());
     //socket->set_option(boost::asio::ip::tcp::no_delay(true));
 
-    auto thisPtr = shared_from_this();
     mResolver.async_resolve(query,
     [func, thisPtr](const boost::system::error_code& err, boost::asio::ip::tcp::resolver::iterator it) {
         if (err) {
+            if (!thisPtr->mFinished) {
+                thisPtr->mFinished = true;
+                ResponsePtr res(new Response);
+                res->httpCode = 434;
+                res->version = SUPPORTED_HTTP_VERSION;
+                func(res);
+            }
             return;
         }
 
-        boost::asio::ip::tcp::endpoint endpoint = *it;
-        thisPtr->mSocket->async_connect(endpoint, boost::bind(&Client::onConnect, thisPtr, func,
-                                                  boost::asio::placeholders::error, ++it));
+        if (!thisPtr->mFinished) {
+            boost::asio::ip::tcp::endpoint endpoint = *it;
+            thisPtr->mSocket->async_connect(endpoint, boost::bind(&Client::onConnect, thisPtr, func,
+                                                      boost::asio::placeholders::error, ++it));
+        }
     });
 }
 
@@ -124,38 +155,61 @@ void Client::onConnect(HandlerFunc func, const boost::system::error_code &err, b
 
         auto thisPtr = shared_from_this();
 
+        if (mFinished) {
+            return;
+        }
+
         boost::asio::async_write(*thisPtr->mSocket, req->buf,
         [thisPtr, req, func](const boost::system::error_code &err, std::size_t) {
             if (err) {
+                if (!thisPtr->mFinished) {
+                    thisPtr->mFinished = true;
+                    ResponsePtr res(new Response);
+                    res->httpCode = 434;
+                    res->version = SUPPORTED_HTTP_VERSION;
+                    func(res);
+                }
+                return;
+            }
+
+            if (thisPtr->mFinished) {
                 return;
             }
 
             ResponsePtr res(new Response);
 
             boost::asio::async_read_until(*thisPtr->mSocket, res->buf, "\r\n\r\n",
-            [thisPtr, res, func](const boost::system::error_code &err, size_t bytesRead) {
+            [thisPtr, res, func](const boost::system::error_code &err, size_t) {
+                if (thisPtr->mFinished) {
+                    return;
+                }
+
                 if (err) {
-                    std::cout << err.message() << std::endl;
+                    thisPtr->mFinished = true;
+                    ResponsePtr res(new Response);
+                    res->httpCode = 434;
+                    res->version = SUPPORTED_HTTP_VERSION;
+                    func(res);
                     return;
                 }
 
                 res->parseHeaders();
 
-                if (res->version != "HTTP/1.1") {
+                if (res->version != SUPPORTED_HTTP_VERSION) {
+                    thisPtr->mFinished = true;
                     res->httpCode = 434;
-                    res->version = "HTTP/1.1";
+                    res->version = SUPPORTED_HTTP_VERSION;
 
                     func(res);
-                } else if (res->httpCode == 200) {
+                } else if (res->httpCode == 200 && !thisPtr->   mFinished) {
 
                     auto it = res->headers.find("Content-Length");
                     if (it != res->headers.end()) {
                         std::stringstream ss(it->second);
                         size_t length = 0;
                         ss >> length;
+
                         if (length > 0) {
-//                            const size_t extraDataSize = res->buf.size() - bytesRead;
-                            /// Bookmark: playing around transfer_exaclty
                             boost::asio::async_read(*thisPtr->mSocket, res->buf, boost::asio::transfer_at_least(1),
                                                     boost::bind(&Client::onDataRead, thisPtr, func, res,
                                                                 boost::asio::placeholders::error));
@@ -170,6 +224,10 @@ void Client::onConnect(HandlerFunc func, const boost::system::error_code &err, b
                                                                 boost::asio::placeholders::error));
                         } else {
                             // malformed http response
+                            res->httpCode = 434;
+                            res->version = SUPPORTED_HTTP_VERSION;
+
+                            func(res);
                         }
                     }
                 } else {
@@ -187,7 +245,7 @@ void Client::onConnect(HandlerFunc func, const boost::system::error_code &err, b
 
         ResponsePtr res(new Response);
         res->httpCode = 434;
-        res->version = "HTTP/1.1";
+        res->version = SUPPORTED_HTTP_VERSION;
 
         func(res);
     }
@@ -195,11 +253,9 @@ void Client::onConnect(HandlerFunc func, const boost::system::error_code &err, b
 
 void Client::onDataRead(HandlerFunc func, ResponsePtr res, const boost::system::error_code &err)
 {
-    //std::cout << "Client::onDataRead" << std::endl;
     if (!err) {
         std::istream ss(&res->buf);
         std::copy(std::istreambuf_iterator<char>(ss), {}, std::back_inserter(res->body));
-        //std::cout << res->body << std::endl;
 
         boost::asio::async_read(*mSocket, res->buf, boost::asio::transfer_at_least(1),
                                 boost::bind(&Client::onDataRead, shared_from_this(), func,
@@ -208,7 +264,7 @@ void Client::onDataRead(HandlerFunc func, ResponsePtr res, const boost::system::
         ResponsePtr res(new Response);
 
         res->httpCode = 434;
-        res->version = "HTTP/1.1";
+        res->version = SUPPORTED_HTTP_VERSION;
 
         func(res);
     } else {

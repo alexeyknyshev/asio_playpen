@@ -40,7 +40,8 @@ int main(int argc, char *argv[])
 
     ConsoleWriter writer;
 
-    server.setHandlerFunc([&ioService, &writer](const Server::RequestPtr &req, Server::ResponsePtr &res,
+    unsigned timeout = conf->getRequestTimeout();
+    server.setHandlerFunc([&ioService, &writer, timeout](const Server::RequestPtr &req, Server::ResponsePtr &res,
                           Server::ResponseCallback resCallback)
     {
         //std::cout << req->type << " " << req->url << " " << req->version << std::endl;
@@ -71,7 +72,8 @@ int main(int argc, char *argv[])
 //        std::cout << "Query: " << uri.getQuery() << std::endl;
 
         auto client = std::make_shared<Client>(ioService);
-        client->sendRequest("GET", urlString, [resCallback, res, &writer](const Client::ResponsePtr &resCli) {
+
+        client->sendRequest("GET", urlString, timeout, [resCallback, res, &writer](const Client::ResponsePtr &resCli) {
             if (resCli->httpCode != Server::Response::HttpCode_OK) {
                 res->httpCode = resCli->httpCode;
             } else {
