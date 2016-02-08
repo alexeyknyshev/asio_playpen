@@ -1,5 +1,6 @@
 #include "client.h"
 
+#include <iostream>
 #include <boost/bind.hpp>
 
 #include "uri.h"
@@ -27,7 +28,8 @@ std::ostream &operator <<(std::ostream &o, const Client::Request &req)
     const std::string path = req.path.empty() ? "/" : req.path;
     o << req.type << " " << path << " " << "HTTP/1.1" << "\r\n"
       << "Host: " << req.host << "\r\n"
-      << "Accept: " << "*/*" << "\r\n\r\n";
+      << "Accept: " << "*/*" << "\r\n"
+      << "Connection: " << "close" << "\r\n\r\n";
 
     return o;
 }
@@ -152,21 +154,11 @@ void Client::onConnect(HandlerFunc func, const boost::system::error_code &err, b
                         size_t length = 0;
                         ss >> length;
                         if (length > 0) {
-                            const size_t extraDataSize = res->buf.size() - bytesRead;
+//                            const size_t extraDataSize = res->buf.size() - bytesRead;
                             /// Bookmark: playing around transfer_exaclty
-                            boost::asio::async_read(*thisPtr->mSocket, res->buf, boost::asio::transfer_exactly(length - extraDataSize - 135),
-                            [thisPtr, res, func](const boost::system::error_code &err, size_t) {
-                                if (!err) {
-                                    std::istream ss(&res->buf);
-                                    std::copy(std::istreambuf_iterator<char>(ss), {}, std::back_inserter(res->body));
-                                    std::cout << res->body << std::endl;
-                                } else {
-                                    res->httpCode = 434;
-                                    res->version = "HTTP/1.1";
-
-                                    func(res);
-                                }
-                            });
+                            boost::asio::async_read(*thisPtr->mSocket, res->buf, boost::asio::transfer_at_least(1),
+                                                    boost::bind(&Client::onDataRead, thisPtr, func, res,
+                                                                boost::asio::placeholders::error));
                         } else {
                             func(res);
                         }
@@ -203,13 +195,13 @@ void Client::onConnect(HandlerFunc func, const boost::system::error_code &err, b
 
 void Client::onDataRead(HandlerFunc func, ResponsePtr res, const boost::system::error_code &err)
 {
-    std::cout << "Client::onDataRead" << std::endl;
+    //std::cout << "Client::onDataRead" << std::endl;
     if (!err) {
         std::istream ss(&res->buf);
         std::copy(std::istreambuf_iterator<char>(ss), {}, std::back_inserter(res->body));
-        std::cout << res->body << std::endl;
+        //std::cout << res->body << std::endl;
 
-        boost::asio::async_read(*mSocket, res->buf,
+        boost::asio::async_read(*mSocket, res->buf, boost::asio::transfer_at_least(1),
                                 boost::bind(&Client::onDataRead, shared_from_this(), func,
                                             res, boost::asio::placeholders::error));
     } else if (err != boost::asio::error::eof) {
