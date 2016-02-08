@@ -89,32 +89,32 @@ bool ServerConfig::loadConfigFile(const std::string &path)
             std::cerr << missingValueErr << "port" << std::endl;
             return false;
         }
-        if (!d["port"].IsInt()) {
-            std::cerr << "json field 'port'' must be int" << std::endl;
+        if (!d["port"].IsUint()) {
+            std::cerr << "json field 'port'' must be uint" << std::endl;
             return false;
         }
 
-        mPort = d["port"].GetInt();
+        mPort = d["port"].GetUint();
 
         if (!d.HasMember("threads")) {
             std::cerr << missingValueErr << "threads" << std::endl;
             return false;
         }
-        if (!d["threads"].IsInt()) {
-            std::cerr << "json field 'threads' must be int" << std::endl;
+        if (!d["threads"].IsUint()) {
+            std::cerr << "json field 'threads' must be uint" << std::endl;
             return false;
         }
-        mThreadCount = d["threads"].GetInt();
+        mThreadCount = d["threads"].GetUint();
 
         if (!d.HasMember("timeout")) {
             std::cerr << missingValueErr << "timeout" << std::endl;
             return false;
         }
-        if (!d["timeout"].IsInt()) {
-            std::cerr << "json field 'timeout' must be int" << std::endl;
+        if (!d["timeout"].IsUint()) {
+            std::cerr << "json field 'timeout' must be uint" << std::endl;
             return false;
         }
-        mRequestTimeout = d["timeout"].GetInt();
+        mRequestTimeout = d["timeout"].GetUint();
 
         return true;
     }
