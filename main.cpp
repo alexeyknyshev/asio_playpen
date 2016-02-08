@@ -1,11 +1,42 @@
 #include <iostream>
 
+#include <pugixml.hpp>
+
 #include "serverconfig.h"
 #include "server.h"
 
 #include "client.h"
 
 #include "uri.h"
+
+std::string convertRssToJson(const std::string &rssString, bool &ok)
+{
+    pugi::xml_document doc;
+    pugi::xml_parse_result result = doc.load_buffer(rssString.c_str(), rssString.size());
+
+    std::string jsonStr;
+    if (result) {
+        pugi::xml_node rss = doc.child("rss");
+        const std::string version = rss.attribute("version").as_string();
+        if (version != "2.0") {
+            ok = false;
+            return "";
+        }
+        pugi::xml_node channel = rss.child("channel");
+        pugi::xml_node title = channel.child("title");
+        pugi::xml_node desc = channel.child("description");
+
+        for (pugi::xml_node item = rss.child("item"); item; item.next_sibling("item")) {
+            pugi::xml_node itemTitle = item.child("title");
+            pugi::xml_node itemLink = item.child("link");
+            pugi::xml_node itemDesc = item.child("description");
+            pugi::xml_node itemPubDate = item.child("pubDate");
+        }
+    } else {
+        ok = false;
+    }
+    return jsonStr;
+}
 
 int main(int argc, char *argv[])
 {
@@ -31,11 +62,13 @@ int main(int argc, char *argv[])
 
         if (req->type != "GET") {
             res->httpCode = Server::Response::HttpCode_NotImplemented;
+            resCallback(res);
             return;
         }
 
         if (req->version != "HTTP/1.1") {
             res->httpCode = Server::Response::HttpCode_HTTPVersionNotSupported;
+            resCallback(res);
             return;
         }
 
