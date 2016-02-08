@@ -7,6 +7,20 @@
 
 #include "uri.h"
 
+class ConsoleWriter {
+public:
+    void write(const std::string &data)
+    {
+        boost::lock_guard<boost::mutex> guard(mutex);
+        counter++;
+        std::cout << counter << std::endl;
+    }
+
+private:
+    std::uint64_t counter;
+    boost::mutex mutex;
+};
+
 int main(int argc, char *argv[])
 {
     auto conf = std::make_shared<ServerConfig>(argc, argv);
@@ -24,10 +38,12 @@ int main(int argc, char *argv[])
 
     Server server(conf, ioService);
 
-    server.setHandlerFunc([&ioService](const Server::RequestPtr &req, Server::ResponsePtr &res,
+    ConsoleWriter writer;
+
+    server.setHandlerFunc([&ioService, &writer](const Server::RequestPtr &req, Server::ResponsePtr &res,
                           Server::ResponseCallback resCallback)
     {
-        std::cout << req->type << " " << req->url << " " << req->version << std::endl;
+        //std::cout << req->type << " " << req->url << " " << req->version << std::endl;
 
         if (req->type != "GET") {
             res->httpCode = Server::Response::HttpCode_NotImplemented;
@@ -55,15 +71,14 @@ int main(int argc, char *argv[])
 //        std::cout << "Query: " << uri.getQuery() << std::endl;
 
         auto client = std::make_shared<Client>(ioService);
-        client->sendRequest("GET", urlString, [resCallback, res](const Client::ResponsePtr &resCli) {
+        client->sendRequest("GET", urlString, [resCallback, res, &writer](const Client::ResponsePtr &resCli) {
             if (resCli->httpCode != Server::Response::HttpCode_OK) {
                 res->httpCode = resCli->httpCode;
             } else {
-
+                writer.write(resCli->body);
             }
             resCallback(res);
         });
-//        std::shared_ptr<boost::asio>
     });
 
     server.join();

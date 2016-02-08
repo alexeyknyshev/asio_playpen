@@ -1,6 +1,7 @@
 #include "serverconfig.h"
 #include "boost/program_options.hpp"
 #include <fstream>
+#include <iostream>
 
 #include "rapidjson/document.h"
 
