@@ -44,12 +44,19 @@ public:
     typedef std::shared_ptr<Response> ResponsePtr;
 
     typedef std::function<void(const ResponsePtr &res)> HandlerFunc;
-    void sendRequest(const std::string &reqType, const std::string &url, HandlerFunc func);
+    void sendRequest(const std::string &reqType, const std::string &url, unsigned timeout, HandlerFunc func);
 
 private:
     boost::asio::io_service &mIOService;
     std::shared_ptr<boost::asio::ip::tcp::socket> mSocket;
+    std::shared_ptr<boost::asio::deadline_timer> mTimer;
     boost::asio::ip::tcp::resolver mResolver;
+    bool mFinished;
+    bool mWithTimeout;
+
+    void finished();
+
+    boost::asio::strand mStrand;
 
     Uri mUri;
     std::string mRequestType;

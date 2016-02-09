@@ -49,7 +49,9 @@ public:
         };
 
         uint httpCode;
-        std::string data;
+        std::string body;
+
+        std::map<std::string, std::string> headers;
 
         std::string getHttpCodeText() const;
 
@@ -59,7 +61,7 @@ public:
 
     typedef std::function<void(const ResponsePtr &res)> ResponseCallback;
     typedef std::function<void(const RequestPtr &req, ResponsePtr &res, ResponseCallback callback)> HandlerFunc;
-    void setHandlerFunc(HandlerFunc handler) { mHandler = handler; }
+    void setHandlerFunc(HandlerFunc handler);
 
 private:
     void readDataFromSocket(const SocketPtr &socket);
@@ -71,6 +73,8 @@ private:
     boost::asio::io_service &mIOService;
 
     HandlerFunc mHandler;
+    boost::mutex mHandlerMutex;
+    typedef boost::lock_guard<boost::mutex> LockGuard;
 };
 
 std::ostream &operator<< (std::ostream &o, const Server::Response &res);

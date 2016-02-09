@@ -16,7 +16,11 @@ add_executable(${PROJECT_NAME}
                     server.cpp
                     serverconfig.cpp
                     client.cpp
-                    uri.cpp)
+                    uri.cpp
+                    rfc882/rfc882.cpp)
+
+include_directories(.
+                    /usr/include)
 
 target_link_libraries(${PROJECT_NAME}
                             ${Boost_SYSTEM_LIBRARY}

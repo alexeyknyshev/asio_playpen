@@ -20,9 +20,14 @@ std::ostream &operator <<(std::ostream &o, const Server::Response &res)
       << "Server: " << "MyHumbleRssProxy" << "\r\n"
       << "Connection: " << "close" << "\r\n";
 
+    auto end = res.headers.cend();
+    for (auto it = res.headers.begin(); it != end; it++) {
+        o << it->first << ": " << it->second << "\r\n";
+    }
+
     if (res.httpCode == Server::Response::HttpCode_OK) {
         o << "Access-Control-Allow-Origin: " << "*" << "\r\n";
-        o << "\r\n" << res.data;
+        o << "\r\n" << res.body;
     } else {
         o << "\r\n";
     }
@@ -89,8 +94,14 @@ void Server::accept()
     });
 }
 
-void Server::readDataFromSocket(const SocketPtr &socket)
+void Server::setHandlerFunc(HandlerFunc handler)
 {
+    LockGuard g(mHandlerMutex);
+    mHandler = handler;
+}
+
+void Server::readDataFromSocket(const SocketPtr &socket)
+{/*
     // set request exp timeout
     std::shared_ptr<boost::asio::deadline_timer> timer(new boost::asio::deadline_timer(mIOService));
     timer->expires_from_now(boost::posix_time::milliseconds(mConfig->getRequestTimeout()));
@@ -105,13 +116,13 @@ void Server::readDataFromSocket(const SocketPtr &socket)
             socket->lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
             socket->lowest_layer().close();
         }
-    });
+    });*/
 
     // read header data
-    std::shared_ptr<Request> req(new Request(socket));
+    RequestPtr req(new Request(socket));
     boost::asio::async_read_until(*socket, req->buf, "\r\n\r\n",
-    [socket, req, timer, this](const boost::system::error_code &err, size_t bytesRead) {
-        timer->cancel();
+    [socket, req, /*timer,*/ this](const boost::system::error_code &err, size_t) {
+//        timer->cancel();
 
         if (err) {
             return;
@@ -120,8 +131,10 @@ void Server::readDataFromSocket(const SocketPtr &socket)
         req->parse();
 
         ResponsePtr res(new Response);
+
+        LockGuard g(mHandlerMutex);
         if (mHandler) {
-            mHandler(req, res, [socket](const ResponsePtr &res){
+            mHandler(req, res, [socket](const ResponsePtr &res) {
                 if (res->httpCode == 0) {
                     res->httpCode = (uint)Server::Response::HttpCode_OK;
                 }

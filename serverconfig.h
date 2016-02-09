@@ -15,9 +15,9 @@ public:
     ServerConfig(int argc, char *argv[]);
     ~ServerConfig();
 
-    int getPort() const { return mPort; }
-    int getThreadCount() const { return mThreadCount; }
-    int getRequestTimeout() const { return mRequestTimeout; }
+    unsigned getPort() const { return mPort; }
+    unsigned getThreadCount() const { return mThreadCount; }
+    unsigned getRequestTimeout() const { return mRequestTimeout; }
     bool getShowHelp() const { return mShowHelp; }
     const std::string &getConfigFilePath() const { return mConfigFilePath; }
 
@@ -31,9 +31,9 @@ private:
     bool loadConfigFile(const std::string &path);
     void applyCmdLineOptions(const boost::program_options::variables_map &vars);
 
-    int mPort;
-    int mThreadCount;
-    int mRequestTimeout;
+    unsigned mPort;
+    unsigned mThreadCount;
+    unsigned mRequestTimeout;
     std::string mConfigFilePath;
 
     bool mShowHelp;

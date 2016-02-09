@@ -1,6 +1,8 @@
 #include "uri.h"
 
 #include <algorithm>
+#include <sstream>
+#include <iomanip>
 
 Uri::Uri(const std::string &uriString)
 {
@@ -69,6 +71,25 @@ std::string Uri::decode(const std::string &uriString)
 
 std::string Uri::encode(const std::string &uriString)
 {
-    std::string ret;
-    return ret;
+    std::ostringstream escaped;
+    escaped.fill('0');
+    escaped << std::hex;
+
+    const auto end = uriString.cend();
+    for (auto it = uriString.cbegin(); it != end; ++it) {
+        std::string::value_type c = *it;
+
+        // Keep alphanumeric and other accepted characters intact
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            escaped << c;
+            continue;
+        }
+
+        // Any other characters are percent-encoded
+        escaped << std::uppercase;
+        escaped << '%' << std::setw(2) << int((unsigned char) c);
+        escaped << std::nouppercase;
+    }
+
+    return escaped.str();
 }
