@@ -85,6 +85,25 @@ func handlerPartialMissing(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, "%v", rss)
 }
 
+func handlerBrokenRss(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
+
+	fmt.Fprintf(w, "%s",
+`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0">
+  <channel>
+    <title>title text</title>
+    <link>https://www.google.ru</link>
+    <description>description text</description>
+    <managingEditor>alexey@gmail.com (Alexey K)</managingEditor>
+    <pubDate>Tue, 09 Feb 2016 21:09:09 +0300</pubDate>
+    <item>`)
+}
+
+func handlerTimeout(w http.ResponseWriter, r *http.Request) {
+	time.Sleep(2000 * time.Millisecond)
+	handler(w, r);
+}
+
 func main() {
 	args := os.Args[1:]
 
@@ -93,6 +112,8 @@ func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/", handler).Methods("GET")
 	router.HandleFunc("/missing", handlerPartialMissing).Methods("GET")
+	router.HandleFunc("/timeout", handlerTimeout).Methods("GET")
+	router.HandleFunc("/broken", handlerBrokenRss).Methods("GET")
 
 	server := &http.Server {
 		Addr: port,

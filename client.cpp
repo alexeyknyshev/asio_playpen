@@ -256,7 +256,7 @@ void Client::onConnect(HandlerFunc func, const boost::system::error_code &err, b
         mSocket->async_connect(endpoint, mStrand.wrap(boost::bind(&Client::onConnect, shared_from_this(), func,
                                                       boost::asio::placeholders::error, ++it)));
     } else {
-        std::cout << err.message() << std::endl;
+        //std::cout << err.message() << std::endl;
         if (mFinished) {
             return;
         }
